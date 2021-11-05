@@ -2,6 +2,8 @@ import pygame
 from pygame.locals import *
 import random
 
+from pygame.sprite import collide_mask
+
 # ball_1.py: has a moving ball and a player.
 # ball_2.py: 
 #       has collision feature.Multiple balls.
@@ -9,11 +11,13 @@ import random
 #       has text info
 screen_width = 640
 screen_height = 480
+
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
-GREEN = (0, 255, 0)
-BLUE = (0, 0, 255)
+GREEN = (255, 0, 0)
+BLUE = (0,0,255)
+COLOR = [WHITE, BLACK, RED, GREEN, BLUE]
 
 class Ball(pygame.sprite.Sprite):
     def __init__(self, surf, radius, color, xspeed, yspeed, id):
@@ -40,6 +44,7 @@ class Ball(pygame.sprite.Sprite):
         newx = self.x + self.xspeed
         newy = self.y + self.yspeed
         in_game = True
+        collision = False
 
         # always inbound on x axis
         if newx > screen_width:
@@ -59,8 +64,10 @@ class Ball(pygame.sprite.Sprite):
                 self.yspeed *= -1
             else:
                 self.y = newy
+        else: 
+            collision = True
         self.draw_ball()
-        return in_game
+        return in_game, collision
 
     def set_speed(self, xs, ys):
         self.xspeed = xs
@@ -110,10 +117,26 @@ class Player(pygame.sprite.Sprite):
     def move_right(self):
         self.topleft_x += self.xspeed
 
-class balls():
+class Balls():
     '''holds a number of balls.'''
-    def __init__(self):
+    def __init__(self, surf, num_of_balls, radius, color = None, xspeed = 0, yspeed = 0):
         self.balls = []
+        for i in range(num_of_balls):
+            if color == None:
+                value = random.choice(COLOR)
+            else:
+                value = color
+
+            if xspeed == 0 and yspeed == 0:
+                xs = random.randint(2,8)
+                ys = random.randint(2,8)
+            else:
+                xs = xspeed
+                ys = yspeed
+
+            new_ball = Ball(surf, radius, value, xs, ys, i+1)
+            self.balls.append(new_ball)
+            self.max_id = i + 1
 
     def addBall(self, ball):
         self.balls.append(ball)
@@ -124,10 +147,17 @@ class balls():
                 self.balls.remove(ball)
 
     def update(self, player_rect):
+        points = 0
         for ball in self.balls:
-            in_game = ball.update(player_rect)
+            in_game, collision = ball.update(player_rect)
+            if collision:
+                points += 1
             if in_game == False:
                 self.removeBall(ball)
+        return points
+
+    def number_balls(self):
+        return len(self.balls)
 
     def has_ball(self):
         if len(self.balls) > 0:
@@ -136,14 +166,29 @@ class balls():
             return False
 
 class Text():
-    def __init__(self, fontname, fontsize, bold):
+    def __init__(self, surface, fontname, fontsize, bold):
         self.fontname = fontname
         self.size = fontsize
         self.font = pygame.font.SysFont(fontname, fontsize, bold)
+        self.surface = surface
+        self.text = ''
+        self.color = None
+        self.left_top = None
 
     def set_text(self, text, color, left_top):
         fontsurf = self.font.render(text, False, color)
+        self.text = text
+        self.color = color
+        self.left_top = left_top
+ 
+    def change_text(self, new_text):
+        self.text = new_text
 
+    def update(self):
+        fontsurf = self.font.render(self.text, False, self.color)
+        self.surface.blit(fontsurf, self.left_top)
+      
+        
 def main():
     pygame.init()
     screen = pygame.display.set_mode((screen_width, screen_height))
@@ -153,15 +198,17 @@ def main():
     clock = pygame.time.Clock()
 
     going = True
-    ball1 = Ball(screen, 8, RED, 3, 4, 1)
-    ball2 = Ball(screen, 8, WHITE, 2, 2.5, 2)
+    points = 0
 
     player = Player(screen, WHITE, 200, 450, 145, 3, 8)
-    ball_list = balls()
-    ball_list.addBall(ball1)
-    ball_list.addBall(ball2)
-
-    game_over_font = pygame.font.SysFont('Courier New', 55)
+    ball_list = Balls(screen, 8, 8)
+ 
+    game_over = Text(screen, 'Courier New', 55, True)
+    game_over.set_text('Game Over', RED, (200, 200))
+    num_balls = Text(screen, 'Courier New', 15, True)
+    num_balls.set_text('Balls: ' + str(ball_list.number_balls()), RED, ((20, 20)))
+    score_text = Text(screen, 'Courier New', 15, True)
+    score_text.set_text('Points: ' + str(points), RED, (screen_width - 120, 20))
 
     while going:
         clock.tick(40)
@@ -182,11 +229,14 @@ def main():
         elif pressed[pygame.K_RIGHT]:
             player.move_right()
         screen.blit(background, (0,0))
-        ball_list.update(player.rect)
+        points = points + ball_list.update(player.rect)
+        num_balls.change_text('Balls: ' + str(ball_list.number_balls()))
+        num_balls.update()
+        score_text.change_text('Points: ' + str(points))
+        score_text.update()
         player.update()
         if ball_list.has_ball() == False:
-            game_over_surf = game_over_font.render('Game Over', False, BLUE)
-            screen.blit(game_over_surf, (200, 100))
+            game_over.update()
         pygame.display.flip()
 
     pygame.quit()
